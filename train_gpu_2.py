@@ -2,18 +2,24 @@
 # -*- coding: utf-8 -*-
 # @Time : 2021/10/7 16:30
 # @Author : SuenDanny
-# @Site : 
+# @Site :
 # @File : train.py
 # @Software: PyCharm
 
 #导入各种包
+import torch
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
-from model import *
+# from model import *
 from torch import nn
 from torch.nn import Flatten
 from torch.utils.data import DataLoader
+import time
 
+start_time = time.time()
+
+#定义训练设备
+device = torch.device("cuda")
 
 #准备训练数据集
 train_data = torchvision.datasets.CIFAR10(root= './dataset', train=True,
@@ -34,14 +40,48 @@ train_data_loader = DataLoader(train_data, batch_size=64)
 test_data_loader = DataLoader(test_data, batch_size=64)
 
 #创建网络模型
+# 搭建神经网络
+class Tudui(nn.Module):
+    def __init__(self):
+        super(Tudui, self).__init__()
+        self.model = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=5, stride=1, padding=2),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5, stride=1, padding=2),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Flatten(),
+            nn.Linear(in_features=64 * 4 * 4, out_features=64),
+            nn.Linear(in_features=64, out_features=10)
+        )
+
+    def forward(self, x):
+        x = self.model(x)
+        return x
+
+
+if __name__ == '__main__':
+    tudui = Tudui()
+    input = torch.ones((64, 3, 32, 32))
+    output = tudui(input)
+    print(output.shape)
+
+
 tudui = Tudui()
+tudui = tudui.to(device)
+# if torch.cuda.is_available():
+#     tudui = tudui.cuda()
 
 # 创建损失函数
 loss_fn = nn.CrossEntropyLoss()
+loss_fn = loss_fn.to(device)
+# loss_fn = loss_fn.cuda()
 
 # 创建优化器,使用随机梯度下降
 learing_rate = 1e-2
 optimizer = torch.optim.SGD(tudui.parameters(), lr=learing_rate)
+
 
 #设置训练网络的一些参数
 #记录训练次数
@@ -49,7 +89,7 @@ total_train_step = 0
 #记录测试次数
 total_test_step = 0
 #训练轮数
-epoch = 100
+epoch = 10
 
 #添加tensorboard
 writer = SummaryWriter("./logs_train")
@@ -59,6 +99,11 @@ for i in range(epoch):
     #训练步骤开始
     for data in train_data_loader:
         imgs, targets = data
+        # imgs = imgs.cuda()
+        # targets = targets.cuda()
+        imgs = imgs.to(device)
+        targets = targets.to(device)
+
         output = tudui(imgs)
         loss = loss_fn(output,targets)
 
@@ -70,6 +115,8 @@ for i in range(epoch):
         optimizer.step()
         total_train_step = total_train_step+1
         if total_train_step % 100 == 0:
+            end_time = time.time()
+            print(end_time-start_time)
             print("训练次数：{}, Loss : {} ".format(total_train_step, loss.item()))
             writer.add_scalar("train_loss", loss.item(), total_train_step)
 
@@ -79,6 +126,10 @@ for i in range(epoch):
     with torch.no_grad():
         for data in test_data_loader:
             imgs, targets = data
+            # imgs = imgs.cuda()
+            # targets = targets.cuda()
+            imgs = imgs.to(device)
+            targets = targets.to(device)
             outputs = tudui(imgs)
             loss = loss_fn(outputs, targets)
             total_test_loss = total_test_loss + loss.item()
@@ -91,7 +142,7 @@ for i in range(epoch):
     writer.add_scalar("test_accuray", total_accuracy / test_data_size, total_test_step)
     total_test_step = total_test_step+1
 
-    torch.save(tudui, "tudui_{}.pth".format(i))
+    torch.save(tudui, "tudui_{}".format(i))
     print("模型已保存")
 
 writer.close()
